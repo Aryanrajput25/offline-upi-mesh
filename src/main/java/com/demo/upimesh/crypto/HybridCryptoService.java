@@ -57,34 +57,34 @@ public class HybridCryptoService {
      * Called by the simulated sender device.
      */
     public String encrypt(PaymentInstruction instruction, PublicKey serverPublicKey) throws Exception {
-        byte[] plaintext = json.writeValueAsBytes(instruction);
+        byte[] plaintext = json.writeValueAsBytes(instruction); //converts PaymentInstruction to Bytes Because encryption works on bytes, not Java objects
 
         // 1. Generate a one-time AES key for this packet.
-        KeyGenerator kg = KeyGenerator.getInstance("AES");
+        KeyGenerator kg = KeyGenerator.getInstance("AES"); //Generate AES Key, Produces something like F92A7D... ,Every payment gets a new key.
         kg.init(AES_KEY_BITS);
         SecretKey aesKey = kg.generateKey();
 
         // 2. AES-GCM encrypt the payload.
-        byte[] iv = new byte[GCM_IV_BYTES];
-        rng.nextBytes(iv);
+        byte[] iv = new byte[GCM_IV_BYTES]; //Generate IV
+        rng.nextBytes(iv); //Creates 12 random bytes. Again, every payment gets a new IV.
         Cipher aes = Cipher.getInstance(AES_TRANSFORMATION);
         aes.init(Cipher.ENCRYPT_MODE, aesKey, new GCMParameterSpec(GCM_TAG_BITS, iv));
-        byte[] aesCiphertext = aes.doFinal(plaintext);
+        byte[] aesCiphertext = aes.doFinal(plaintext); //AES Encryption which encryptes the payment details
 
         // 3. RSA-OAEP encrypt the AES key with the server's public key.
-        Cipher rsa = Cipher.getInstance(RSA_TRANSFORMATION);
+        Cipher rsa = Cipher.getInstance(RSA_TRANSFORMATION); //RSA Encryption, Instead of encrypting the entire payment, only AES Key is encrypted using Server Public Key
         OAEPParameterSpec oaep = new OAEPParameterSpec(
                 "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
-        rsa.init(Cipher.ENCRYPT_MODE, serverPublicKey, oaep);
-        byte[] encryptedAesKey = rsa.doFinal(aesKey.getEncoded());
+        rsa.init(Cipher.ENCRYPT_MODE, serverPublicKey, oaep); //Only the server has the corresponding private key, so only it can recover the AES key.
+        byte[] encryptedAesKey = rsa.doFinal(aesKey.getEncoded()); //RSA Encryption encryptes AES key
 
-        // 4. Pack: [encrypted AES key][IV][AES ciphertext + tag]
+        // 4. Pack Everything Together: [encrypted AES key] + [IV] + [AES ciphertext + tag]
         ByteBuffer buf = ByteBuffer.allocate(encryptedAesKey.length + iv.length + aesCiphertext.length);
         buf.put(encryptedAesKey);
         buf.put(iv);
-        buf.put(aesCiphertext);
+        buf.put(aesCiphertext); //This predictable format lets the server split the data correctly during decryption.
 
-        return Base64.getEncoder().encodeToString(buf.array());
+        return Base64.getEncoder().encodeToString(buf.array()); //Base64 Encoding, Base64 converts binary into a text-safe representation. because Encrypted data is binary. and HTTP APIs generally send text more easily.
     }
 
     /**
@@ -92,7 +92,7 @@ public class HybridCryptoService {
      * If anything has been tampered with — wrong key, modified ciphertext,
      * truncated input — this throws.
      */
-    public PaymentInstruction decrypt(String base64Ciphertext) throws Exception {
+    public PaymentInstruction decrypt(String base64Ciphertext) throws Exception { //The decrypt() method simply performs the reverse:
         byte[] all = Base64.getDecoder().decode(base64Ciphertext);
 
         if (all.length < RSA_ENCRYPTED_KEY_BYTES + GCM_IV_BYTES + GCM_TAG_BITS / 8) {
@@ -120,7 +120,7 @@ public class HybridCryptoService {
         // 2. AES-GCM decrypt + verify the tag.
         Cipher aes = Cipher.getInstance(AES_TRANSFORMATION);
         aes.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(GCM_TAG_BITS, iv));
-        byte[] plaintext = aes.doFinal(aesCiphertext);
+        byte[] plaintext = aes.doFinal(aesCiphertext); //If any part of the encrypted data is changed, aes.doFinal() will throw an exception because GCM verifies the authentication tag.
 
         return json.readValue(plaintext, PaymentInstruction.class);
     }
@@ -132,8 +132,8 @@ public class HybridCryptoService {
      * but cannot forge a valid ciphertext for a different payload. Two delivered
      * copies of the same packet have identical ciphertexts, hence identical hashes.
      */
-    public String hashCiphertext(String base64Ciphertext) throws Exception {
-        MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+    public String hashCiphertext(String base64Ciphertext) throws Exception { //It computes a SHA-256 hash of the ciphertext.
+        MessageDigest sha256 = MessageDigest.getInstance("SHA-256"); //The project uses this hash as an idempotency key.
         byte[] hash = sha256.digest(base64Ciphertext.getBytes());
         StringBuilder hex = new StringBuilder();
         for (byte b : hash) {

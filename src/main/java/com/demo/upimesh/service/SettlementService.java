@@ -25,42 +25,42 @@ import java.time.Instant;
  * but defense in depth.)
  */
 @Service
-public class SettlementService {
+public class SettlementService { //Now the server has decrypted the payment and asks: "Can I complete this payment?"
 
     private static final Logger log = LoggerFactory.getLogger(SettlementService.class);
 
-    @Autowired private AccountRepository accounts;
-    @Autowired private TransactionRepository transactions;
+    @Autowired private AccountRepository accounts; //database of Accounts Table means in db there is accounts for each person
+    @Autowired private TransactionRepository transactions; //This stores payment history.
 
     @Transactional
-    public Transaction settle(PaymentInstruction instruction, String packetHash,
+    public Transaction settle(PaymentInstruction instruction, String packetHash, //PaymentInstruction contains sender,receiver,amount, pin hash, nonce.
                               String bridgeNodeId, int hopCount) {
 
-        Account sender = accounts.findById(instruction.getSenderVpa())
+        Account sender = accounts.findById(instruction.getSenderVpa()) //finds sender
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Unknown sender VPA: " + instruction.getSenderVpa()));
 
-        Account receiver = accounts.findById(instruction.getReceiverVpa())
+        Account receiver = accounts.findById(instruction.getReceiverVpa())//finds receiver
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Unknown receiver VPA: " + instruction.getReceiverVpa()));
 
         BigDecimal amount = instruction.getAmount();
         if (amount.signum() <= 0) {
-            throw new IllegalArgumentException("Amount must be positive");
+            throw new IllegalArgumentException("Amount must be positive"); //amount wants to send must be positive integer
         }
 
-        if (sender.getBalance().compareTo(amount) < 0) {
+        if (sender.getBalance().compareTo(amount) < 0) { //check balance first, if sender wants to send more amount than the balance amount
             log.warn("Insufficient balance: {} has ₹{}, tried to send ₹{}",
                     sender.getVpa(), sender.getBalance(), amount);
             return recordRejected(instruction, packetHash, bridgeNodeId, hopCount);
         }
 
-        sender.setBalance(sender.getBalance().subtract(amount));
-        receiver.setBalance(receiver.getBalance().add(amount));
+        sender.setBalance(sender.getBalance().subtract(amount)); //update the senders new balance
+        receiver.setBalance(receiver.getBalance().add(amount)); //update the receivers new balance
         accounts.save(sender);
         accounts.save(receiver);
 
-        Transaction tx = new Transaction();
+        Transaction tx = new Transaction(); //A transaction object is created. Something like- Sender: Aryan | Receiver: Rahul | Amount: £500 | Status: SUCCESS | Time: Current Time
         tx.setPacketHash(packetHash);
         tx.setSenderVpa(instruction.getSenderVpa());
         tx.setReceiverVpa(instruction.getReceiverVpa());
@@ -70,7 +70,7 @@ public class SettlementService {
         tx.setBridgeNodeId(bridgeNodeId);
         tx.setHopCount(hopCount);
         tx.setStatus(Transaction.Status.SETTLED);
-        transactions.save(tx);
+        transactions.save(tx); //Payment history is stored.
 
         log.info("SETTLED ₹{} from {} to {} (packetHash={}, bridge={}, hops={})",
                 amount, sender.getVpa(), receiver.getVpa(),
@@ -80,9 +80,9 @@ public class SettlementService {
     }
 
     private Transaction recordRejected(PaymentInstruction instruction, String packetHash,
-                                       String bridgeNodeId, int hopCount) {
-        Transaction tx = new Transaction();
-        tx.setPacketHash(packetHash);
+                                       String bridgeNodeId, int hopCount) { //This method is called when a payment is rejected
+        Transaction tx = new Transaction(); //Creates a new Transaction object
+        tx.setPacketHash(packetHash); //Fills it with all payment details
         tx.setSenderVpa(instruction.getSenderVpa());
         tx.setReceiverVpa(instruction.getReceiverVpa());
         tx.setAmount(instruction.getAmount());
@@ -90,7 +90,7 @@ public class SettlementService {
         tx.setSettledAt(Instant.now());
         tx.setBridgeNodeId(bridgeNodeId);
         tx.setHopCount(hopCount);
-        tx.setStatus(Transaction.Status.REJECTED);
+        tx.setStatus(Transaction.Status.REJECTED); //Marks the transaction as REJECTED and saves it
         return transactions.save(tx);
     }
 }

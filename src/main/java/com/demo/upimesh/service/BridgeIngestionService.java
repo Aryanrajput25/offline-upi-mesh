@@ -25,20 +25,20 @@ import java.time.Instant;
  *   5. Hand off to SettlementService for the actual debit/credit.
  */
 @Service
-public class BridgeIngestionService {
+public class BridgeIngestionService { //in this we decrypt the message, Think of this class as the security gate before a payment enters the banking system.
 
     private static final Logger log = LoggerFactory.getLogger(BridgeIngestionService.class);
 
-    @Autowired private HybridCryptoService crypto;
-    @Autowired private IdempotencyService idempotency;
-    @Autowired private SettlementService settlement;
+    @Autowired private HybridCryptoService crypto; //Its job: Encrypted Packet -> Decrypt -> PaymentInstruction
+    @Autowired private IdempotencyService idempotency; //This service prevents processing the same payment twice.
+    @Autowired private SettlementService settlement; //This performs the actual payment. like Deduct Sender Balance, Add Receiver Balance
 
     @Value("${upi.mesh.packet-max-age-seconds:86400}")
     private long maxAgeSeconds;
 
     public IngestResult ingest(MeshPacket packet, String bridgeNodeId, int hopCount) {
         try {
-            String packetHash = crypto.hashCiphertext(packet.getCiphertext());
+            String packetHash = crypto.hashCiphertext(packet.getCiphertext()); //Hash the ciphertext, produces SHA-256 Hash like A82JD82JSK...
 
             // ---- Idempotency gate ----
             if (!idempotency.claim(packetHash)) {
@@ -50,7 +50,7 @@ public class BridgeIngestionService {
             // ---- Decrypt ----
             PaymentInstruction instruction;
             try {
-                instruction = crypto.decrypt(packet.getCiphertext());
+                instruction = crypto.decrypt(packet.getCiphertext()); //Now we finally recover PaymentInstruction containing Sender, Receiver, Amount, Nonce ,PIN Hash
             } catch (Exception e) {
                 log.warn("Decryption failed for packet {}: {}",
                         packetHash.substring(0, 12) + "...", e.getMessage());
@@ -69,8 +69,8 @@ public class BridgeIngestionService {
             }
 
             // ---- Settle ----
-            Transaction tx = settlement.settle(instruction, packetHash, bridgeNodeId, hopCount);
-            return IngestResult.settled(packetHash, tx);
+            Transaction tx = settlement.settle(instruction, packetHash, bridgeNodeId, hopCount); //This is where Money moves.
+            return IngestResult.settled(packetHash, tx); //BridgeIngestionService itself never changes account balances. It simply passes the payment to the correct service.
 
         } catch (Exception e) {
             log.error("Ingestion error: {}", e.getMessage(), e);

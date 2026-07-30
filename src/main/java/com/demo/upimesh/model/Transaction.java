@@ -10,42 +10,42 @@ import java.time.Instant;
  * The packetHash is the idempotency key — uniqueness is enforced at the DB level
  * as a defense-in-depth fallback if the Redis-style cache layer ever fails.
  */
-@Entity
+@Entity //this tells spring that "This class should be stored as a table in the database."
 @Table(name = "transactions",
         indexes = { @Index(name = "idx_packet_hash", columnList = "packetHash", unique = true) })
-public class Transaction {
+public class Transaction { //This class represents one payment record. Store every transaction as a row in the transaction table.
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long id; //Every transaction gets a unique ID.
 
     @Column(nullable = false, unique = true, length = 64)
-    private String packetHash; // SHA-256 hex of the encrypted packet
+    private String packetHash; // This stores SHA-256 hex of the encrypted packet
 
     @Column(nullable = false)
-    private String senderVpa;
+    private String senderVpa; //Who sent the money.
 
     @Column(nullable = false)
-    private String receiverVpa;
+    private String receiverVpa; //Who received the money.
 
     @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal amount;
+    private BigDecimal amount; //Again, BigDecimal is used for precise financial calculations.
 
     @Column(nullable = false)
-    private Instant signedAt; // When the sender originally signed it (offline)
+    private Instant signedAt; // When the sender originally signed it (offline). This is the time when the user created the payment.
 
     @Column(nullable = false)
-    private Instant settledAt; // When the backend actually processed it
+    private Instant settledAt; // When the backend actually processed it. This is the time when the server completed the payment.
 
     @Column(nullable = false)
-    private String bridgeNodeId; // Which mesh node finally delivered it
+    private String bridgeNodeId; // Which mesh node finally delivered it. Which bridge device uploaded this payment?
 
     @Column(nullable = false)
-    private int hopCount; // How many devices it passed through
+    private int hopCount; // How many devices it passed through.
 
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.STRING) //An enum allows only predefined constant values (e.g., SUCCESS, REJECTED), preventing typos and invalid states while improving code readability and reliability.
     @Column(nullable = false)
-    private Status status;
+    private Status status; //Only two possible values- success and reject.
 
     public enum Status { SETTLED, REJECTED }
 

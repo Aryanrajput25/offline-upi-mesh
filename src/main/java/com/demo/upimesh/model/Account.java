@@ -8,18 +8,18 @@ import java.math.BigDecimal;
  * Simulated bank account. In a real system this would live in the bank's core,
  * not in our service. For the demo, we own the ledger.
  */
-@Entity
+@Entity //this tells spring that "This class should be stored as a table in the database."
 @Table(name = "accounts")
 public class Account {
 
-    @Id
+    @Id //Spring automatically generates these IDs. like 1 2 3 4...You never manually write:
     private String vpa; // Virtual Payment Address, e.g. "alice@demo"
 
     @Column(nullable = false)
-    private String holderName;
+    private String holderName; //Only for display. The system actually searches using the VPA, not the owner's name.
 
     @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal balance;
+    private BigDecimal balance; //This stores the money. bigdecimal is Exactly correct for adding decimal numbers
 
     @Version  // Optimistic locking — prevents lost updates on concurrent transfers
     private Long version;
