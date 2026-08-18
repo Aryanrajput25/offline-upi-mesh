@@ -39,22 +39,23 @@ class IdempotencyConcurrencyTest {
     }
 
     @Test
-    void singlePacketDeliveredByThreeBridgesSettlesExactlyOnce() throws Exception {
+    void singlePacketDeliveredByHundredBridgesSettlesExactlyOnce() throws Exception {
         // Capture starting balances
         BigDecimal aliceBefore = accounts.findById("alice@demo").orElseThrow().getBalance();
         BigDecimal bobBefore = accounts.findById("bob@demo").orElseThrow().getBalance();
 
-        // One packet, but we'll deliver it from 3 "bridges" simultaneously
+        // One packet, but we'll deliver it from N "bridges" simultaneously
+        final int concurrentBridges = 100;
         MeshPacket packet = demoService.createPacket(
                 "alice@demo", "bob@demo", new BigDecimal("100.00"), "1234", 5);
 
-        ExecutorService pool = Executors.newFixedThreadPool(3);
+        ExecutorService pool = Executors.newFixedThreadPool(concurrentBridges);
         CountDownLatch start = new CountDownLatch(1);
         AtomicInteger settled = new AtomicInteger();
         AtomicInteger duplicates = new AtomicInteger();
 
-        Future<?>[] futures = new Future[3];
-        for (int i = 0; i < 3; i++) {
+        Future<?>[] futures = new Future[concurrentBridges];
+        for (int i = 0; i < concurrentBridges; i++) {
             final String node = "bridge-" + i;
             futures[i] = pool.submit(() -> {
                 try {
@@ -66,12 +67,12 @@ class IdempotencyConcurrencyTest {
             });
         }
 
-        start.countDown(); // release all 3 threads at once
+        start.countDown(); // release all threads at once
         for (Future<?> f : futures) f.get(5, TimeUnit.SECONDS);
         pool.shutdown();
 
         assertEquals(1, settled.get(), "exactly one bridge should settle");
-        assertEquals(2, duplicates.get(), "the other two should be duplicates");
+        assertEquals(concurrentBridges - 1, duplicates.get(), "all others should be duplicates");
 
         // Balance moved exactly once
         BigDecimal aliceAfter = accounts.findById("alice@demo").orElseThrow().getBalance();
