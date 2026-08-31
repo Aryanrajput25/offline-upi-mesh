@@ -19,8 +19,8 @@ import java.util.*;
  *   /api/bridge/ingest   → THE real production endpoint a real bridge node would hit
  *   /api/accounts, /api/transactions → for the dashboard
  */
-@RestController
-@RequestMapping("/api")
+@RestController //tells Spring that this class handles REST requests
+@RequestMapping("/api") //means every endpoint inside it starts with /api
 public class ApiController {
 
     @Autowired private ServerKeyHolder serverKey;
@@ -34,13 +34,13 @@ public class ApiController {
     // ------------------------------------------------------------------ key
 
     @GetMapping("/server-key")
-    public Map<String, String> getServerPublicKey() {
+    public Map<String, String> getServerPublicKey() { //This endpoint returns the server's public RSA key and crypto information.
         return Map.of(
                 "publicKey", serverKey.getPublicKeyBase64(),
                 "algorithm", "RSA-2048 / OAEP-SHA256",
                 "hybridScheme", "RSA-OAEP encrypts an AES-256-GCM session key"
         );
-    }
+    } //Why is this public key needed? ans-The sender needs the server's public key to encrypt the payment. The server's private key remains on the backend.
 
     // ---------------------------------------------------------------- demo
 
@@ -48,18 +48,19 @@ public class ApiController {
      * Demo helper: build a packet on the server (simulating a sender phone)
      * and inject it into the mesh at the given device.
      */
-    @PostMapping("/demo/send")
-    public ResponseEntity<?> demoSend(@RequestBody DemoSendRequest req) throws Exception {
-        MeshPacket packet = demo.createPacket(
+    @PostMapping("/demo/send") //When you click "Inject into Mesh” on the dashboard, JavaScript sends: senderVpa, receiverVpa, amount, pin, ttl, startDevice.
+    public ResponseEntity<?> demoSend(@RequestBody DemoSendRequest req) throws Exception { //`POST /api/demo/send → Create encrypted packet → phone-alice holds packet
+
+        MeshPacket packet = demo.createPacket( //Creating the packet. The controller calls: MeshPacket
                 req.senderVpa, req.receiverVpa, req.amount, req.pin,
-                req.ttl == null ? 5 : req.ttl);
+                req.ttl == null ? 5 : req.ttl); //So default TTL = 5, if ttl is not provided by the user
 
-        String startDevice = req.startDevice == null ? "phone-alice" : req.startDevice;
-        mesh.inject(startDevice, packet);
+        String startDevice = req.startDevice == null ? "phone-alice" : req.startDevice;//Choosing the starting device, If no device is provided: phone-alice is used
+        mesh.inject(startDevice, packet); //puts the packet into that simulated phone.
 
-        return ResponseEntity.ok(Map.of(
+        return ResponseEntity.ok(Map.of( //at last it returns- It sends information back to the frontend.
                 "packetId", packet.getPacketId(),
-                "ciphertextPreview", packet.getCiphertext().substring(0, 64) + "...",
+                "ciphertextPreview", packet.getCiphertext().substring(0, 64) + "...", //it doesn't return the complete ciphertext—only the first 64 characters as a preview.
                 "ttl", packet.getTtl(),
                 "injectedAt", startDevice
         ));
@@ -77,9 +78,9 @@ public class ApiController {
     // -------------------------------------------------------------- mesh sim
 
     @GetMapping("/mesh/state")
-    public Map<String, Object> meshState() {
+    public Map<String, Object> meshState() { //This endpoint tells the dashboard: "What is currently happening inside the simulated mesh?"
         List<Map<String, Object>> deviceData = new ArrayList<>();
-        for (VirtualDevice d : mesh.getDevices()) {
+        for (VirtualDevice d : mesh.getDevices()) { //it loops through every virtual device: and collects: deviceId,hasInternet,packetCount,packetIds.
             deviceData.add(Map.of(
                     "deviceId", d.getDeviceId(),
                     "hasInternet", d.hasInternet(),
@@ -91,13 +92,13 @@ public class ApiController {
         }
         return Map.of(
                 "devices", deviceData,
-                "idempotencyCacheSize", idempotency.size()
+                "idempotencyCacheSize", idempotency.size() //it also return this So you can see how many packet hashes are currently remembered.
         );
     }
 
-    @PostMapping("/mesh/gossip")
+    @PostMapping("/mesh/gossip") //runs one simulated round of packet spreading.
     public Map<String, Object> meshGossip() {
-        MeshSimulatorService.GossipResult r = mesh.gossipOnce();
+        MeshSimulatorService.GossipResult r = mesh.gossipOnce(); //This triggers one gossip round:
         return Map.of(
                 "transfers", r.transfers(),
                 "deviceCounts", r.deviceCounts()
@@ -112,9 +113,9 @@ public class ApiController {
      * if multiple bridge nodes hold the same packet, the server gets multiple
      * concurrent POSTs of the same ciphertext, and only one should settle.
      */
-    @PostMapping("/mesh/flush")
+    @PostMapping("/mesh/flush") //think: "All bridge devices have now reached an internet connection."
     public Map<String, Object> meshFlush() {
-        List<MeshSimulatorService.BridgeUpload> uploads = mesh.collectBridgeUploads();
+        List<MeshSimulatorService.BridgeUpload> uploads = mesh.collectBridgeUploads(); //This finds packets held by bridge devices.
 
         List<Map<String, Object>> results = new ArrayList<>();
         // Upload them in parallel to actually exercise concurrent idempotency.
