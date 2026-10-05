@@ -45,6 +45,14 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- MySQL driver, only used when the app is started with the "mysql" Spring profile.
+             H2 stays the default so the project still runs with zero setup. -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Validation -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
