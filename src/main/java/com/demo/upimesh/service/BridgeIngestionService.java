@@ -24,6 +24,7 @@ import java.time.Instant;
  *   4. Check freshness — reject if signedAt is too old (replay protection).
  *   5. Hand off to SettlementService for the actual debit/credit.
  */
+//this receives and validates packets
 @Service
 public class BridgeIngestionService { //in this we decrypt the message, Think of this class as the security gate before a payment enters the banking system.
 

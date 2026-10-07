@@ -24,6 +24,7 @@ import java.time.Instant;
  * the balance. (In a demo the idempotency layer should always catch this first,
  * but defense in depth.)
  */
+//this is where actually moves money
 @Service
 public class SettlementService { //Now the server has decrypted the payment and asks: "Can I complete this payment?"
 

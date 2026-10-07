@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * /api/mesh/flush endpoint causes it to actually POST that packet to our
  * backend — simulating the moment a phone walks outside and gets 4G.
  */
-@Service //This class contains business logic.
+@Service //This class contains business logic of - how packets moves
 public class MeshSimulatorService { //This is the class that simulates how packets move from one virtual phone to another.
 
     private static final Logger log = LoggerFactory.getLogger(MeshSimulatorService.class); //Used for messages like: Packet abc123 injected at phone-alice, 15 packet transfers etc

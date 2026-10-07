@@ -36,6 +36,7 @@ import java.util.Base64;
  * causes decryption to fail with an exception. This is what makes it safe for
  * untrusted intermediates to hold.
  */
+//Crypto layer handles security - handles How do we protect the payment?
 @Service
 public class HybridCryptoService {
 

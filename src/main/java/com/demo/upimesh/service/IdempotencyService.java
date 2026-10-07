@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * ConcurrentHashMap.putIfAbsent is the JVM-local equivalent of Redis SETNX.
  */
 //Idempotency means that the same request is processed only once, even if it is received multiple times.
-    //Before settlement, the server asks: "Have I already processed this payment?"
+//Before settlement, the server asks: "Have I already processed this payment?"
 @Service
 public class IdempotencyService {
 

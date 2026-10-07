@@ -19,6 +19,7 @@ import java.util.*;
  *   /api/bridge/ingest   → THE real production endpoint a real bridge node would hit
  *   /api/accounts, /api/transactions → for the dashboard
  */
+//this handles the REST APIs
 @RestController //tells Spring that this class handles REST requests
 @RequestMapping("/api") //means every endpoint inside it starts with /api
 public class ApiController {

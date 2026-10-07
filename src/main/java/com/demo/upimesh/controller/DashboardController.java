@@ -3,6 +3,7 @@ package com.demo.upimesh.controller;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 
+//this serves the webpage.
 @Controller
 public class DashboardController {
 
