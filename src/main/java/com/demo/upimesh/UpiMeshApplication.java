@@ -12,6 +12,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *
  * Then open http://localhost:8080
  */
+//think of it as Spring, start my application, create all required objects, configure everything, and start the web server.
 @SpringBootApplication
 public class UpiMeshApplication {
     public static void main(String[] args) {

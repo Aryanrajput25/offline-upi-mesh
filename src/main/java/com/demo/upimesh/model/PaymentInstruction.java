@@ -15,6 +15,7 @@ import java.math.BigDecimal;
  *   - pinHash: in a real system the user enters a UPI PIN; we'd verify it against
  *              a hash held by the bank. Here we just record it for realism.
  */
+//contains What is being paid?
 public class PaymentInstruction { // Before encryption, every payment is stored in this object.
                                     //So this class is created twice: Before encryption (sender side) and After decryption (server side)
     private String senderVpa; //Instead of using bank account numbers, UPI uses VPAs. like aryan@oksbi

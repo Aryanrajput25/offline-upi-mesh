@@ -20,10 +20,10 @@ import java.util.*;
  *   /api/accounts, /api/transactions → for the dashboard
  */
 //this handles the REST APIs
-@RestController //tells Spring that this class handles REST requests
+@RestController //tells Spring that this class handles HTTP REST requests and returns data directly as HTTP responses.
 @RequestMapping("/api") //means every endpoint inside it starts with /api
 public class ApiController {
-
+    //Dependency injection
     @Autowired private ServerKeyHolder serverKey;
     @Autowired private DemoService demo;
     @Autowired private MeshSimulatorService mesh;
@@ -31,6 +31,8 @@ public class ApiController {
     @Autowired private AccountRepository accountRepo;
     @Autowired private TransactionRepository txRepo;
     @Autowired private IdempotencyService idempotency;
+
+    //Instead of manually doing: DemoService demo = new DemoService(); → Spring creates the objects and injects them into the controller.
 
     // ------------------------------------------------------------------ key
 
@@ -49,19 +51,21 @@ public class ApiController {
      * Demo helper: build a packet on the server (simulating a sender phone)
      * and inject it into the mesh at the given device.
      */
+    //@RequestBody helps in - Take the incoming JSON request body and convert it into a Java object.
     @PostMapping("/demo/send") //When you click "Inject into Mesh” on the dashboard, JavaScript sends: senderVpa, receiverVpa, amount, pin, ttl, startDevice.
     public ResponseEntity<?> demoSend(@RequestBody DemoSendRequest req) throws Exception { //`POST /api/demo/send → Create encrypted packet → phone-alice holds packet
 
-        MeshPacket packet = demo.createPacket( //Creating the packet. The controller calls: MeshPacket
+        MeshPacket packet = demo.createPacket( //it calls demoService's createPacket, Creating the packet. The controller calls: MeshPacket
                 req.senderVpa, req.receiverVpa, req.amount, req.pin,
                 req.ttl == null ? 5 : req.ttl); //So default TTL = 5, if ttl is not provided by the user
 
         String startDevice = req.startDevice == null ? "phone-alice" : req.startDevice;//Choosing the starting device, If no device is provided: phone-alice is used
-        mesh.inject(startDevice, packet); //puts the packet into that simulated phone.
+        mesh.inject(startDevice, packet); //this calls MeshSimulatorService.inject(). this puts the packet into that simulated phone.
 
+        //The backend sends JSON back to the browser.
         return ResponseEntity.ok(Map.of( //at last it returns- It sends information back to the frontend.
                 "packetId", packet.getPacketId(),
-                "ciphertextPreview", packet.getCiphertext().substring(0, 64) + "...", //it doesn't return the complete ciphertext—only the first 64 characters as a preview.
+                "ciphertextPreview", packet.getCiphertext().substring(0, 64) + "...", //it doesn't return the complete ciphertext — only the first 64 characters as a preview.
                 "ttl", packet.getTtl(),
                 "injectedAt", startDevice
         ));
@@ -99,7 +103,7 @@ public class ApiController {
 
     @PostMapping("/mesh/gossip") //runs one simulated round of packet spreading.
     public Map<String, Object> meshGossip() {
-        MeshSimulatorService.GossipResult r = mesh.gossipOnce(); //This triggers one gossip round:
+        MeshSimulatorService.GossipResult r = mesh.gossipOnce(); //this calls MeshSimulatorService.gossipOnce(). This triggers one gossip round:
         return Map.of(
                 "transfers", r.transfers(),
                 "deviceCounts", r.deviceCounts()
@@ -114,6 +118,7 @@ public class ApiController {
      * if multiple bridge nodes hold the same packet, the server gets multiple
      * concurrent POSTs of the same ciphertext, and only one should settle.
      */
+    //if packet had travelled to bridge device, after it the bridge device does flush()
     @PostMapping("/mesh/flush") //think: "All bridge devices have now reached an internet connection."
     public Map<String, Object> meshFlush() {
         List<MeshSimulatorService.BridgeUpload> uploads = mesh.collectBridgeUploads(); //This finds packets held by bridge devices.
@@ -122,7 +127,7 @@ public class ApiController {
         // Upload them in parallel to actually exercise concurrent idempotency.
         uploads.parallelStream().forEach(up -> {
             BridgeIngestionService.IngestResult r =
-                    bridge.ingest(up.packet(), up.bridgeNodeId(), 5 - up.packet().getTtl());
+                    bridge.ingest(up.packet(), up.bridgeNodeId(), 5 - up.packet().getTtl()); //5 - up.packet().getTtl() calculates an hop count based on the initial TTL being 5
             synchronized (results) {
                 results.add(Map.of(
                         "bridgeNode", up.bridgeNodeId(),

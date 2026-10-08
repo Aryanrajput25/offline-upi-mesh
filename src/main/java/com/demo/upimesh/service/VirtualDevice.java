@@ -17,6 +17,7 @@ public class VirtualDevice { //Think of this class as one mobile phone. Your pro
     private final String deviceId; //Every phone needs a unique identity.
     private final boolean hasInternet; //It simulates whether the phone currently has internet.
 
+    //This is the phone's local storage of packets it has seen.
     //here key is packetId, Looking up a packet by ID in a map is much faster than searching through a list. Key=packet.getPacketId(), Value = packet
     private final Map<String, MeshPacket> heldPackets = new ConcurrentHashMap<>(); //A normal HashMap is not thread-safe. ConcurrentHashMap is designed for safe concurrent access.
 
@@ -28,21 +29,21 @@ public class VirtualDevice { //Think of this class as one mobile phone. Your pro
     public String getDeviceId() { return deviceId; }
     public boolean hasInternet() { return hasInternet; }
 
-    public void hold(MeshPacket packet) { //Store this packet in my memory.
+    public void hold(MeshPacket packet) { //Store this packet in my memory only if this device doesn't already have that packet ID.
         heldPackets.putIfAbsent(packet.getPacketId(), packet);
-    } //putifabsent avoids unnecessary duplicate storage.
+    } //putifabsent avoids unnecessary duplicate storage. So the same phone doesn't unnecessarily store the same packet twice.
 
-    public Collection<MeshPacket> getHeldPackets() {
+    public Collection<MeshPacket> getHeldPackets() { //The mesh uses this to find: "What packets does this phone have?"
         return heldPackets.values();
     } //This allows the mesh simulator to forward every stored packet.
 
-    public boolean holds(String packetId) {
+    public boolean holds(String packetId) { //asks Does this phone already have packet
         return heldPackets.containsKey(packetId);
     } //Do I already have true of false
 
     public int packetCount() {
         return heldPackets.size();
-    } //returns the no. of packets in each phone
+    } //returns the no. of packets on that phone.
 
     public void clear() {
         heldPackets.clear();

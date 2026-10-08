@@ -17,6 +17,7 @@ import jakarta.validation.constraints.Min;
  *   server. The ciphertext is authenticated by hybrid encryption, so any
  *   tampering inside the encrypted blob is detected on decryption.
  */
+//contains What travels through the network?
 public class MeshPacket { //it represents what actually travels through the mesh network.
 
     @NotBlank

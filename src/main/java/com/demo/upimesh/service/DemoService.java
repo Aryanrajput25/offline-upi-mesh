@@ -20,7 +20,7 @@ import java.util.UUID;
 /**
  * Helper service that:
  *   - seeds demo accounts on startup
- *   - simulates "sender phone creates an encrypted packet" flow
+ *   - simulates "sender phone creates an encrypted packet" flow (Create the encrypted payment packet)
  */
 @Service
 public class DemoService {
@@ -31,9 +31,9 @@ public class DemoService {
     @Autowired private HybridCryptoService crypto;
     @Autowired private ServerKeyHolder serverKey;
 
-    @PostConstruct
-    public void seedAccounts() {
-        if (accounts.count() == 0) {
+    @PostConstruct //it means Run this method after the Spring bean has been created and its dependencies have been injected.
+    public void seedAccounts() { //it creates demo accounts if database is empty
+        if (accounts.count() == 0) {  //prevents duplicate seeding every time the method runs.
             accounts.save(new Account("alice@demo", "Alice",   new BigDecimal("5000.00")));
             accounts.save(new Account("bob@demo",   "Bob",     new BigDecimal("1000.00")));
             accounts.save(new Account("carol@demo", "Carol",   new BigDecimal("2500.00")));
@@ -52,24 +52,26 @@ public class DemoService {
      * would run on the phone. The phone would have already cached the server's
      * public key during a previous online session.
      */
+    //It simulates what the sender's phone would do while offline.
     public MeshPacket createPacket(String senderVpa, String receiverVpa,
                                    BigDecimal amount, String pin, int ttl) throws Exception {
-        PaymentInstruction instruction = new PaymentInstruction(
+        PaymentInstruction instruction = new PaymentInstruction(  //These are the actual payment information before encryption.
                 senderVpa,
                 receiverVpa,
                 amount,
-                sha256Hex(pin),
-                UUID.randomUUID().toString(),       // nonce — guarantees uniqueness
-                Instant.now().toEpochMilli()        // signedAt — for freshness check
+                sha256Hex(pin), //eg-SHA-256(...)
+                UUID.randomUUID().toString(), //8c71...       // nonce — guarantees uniqueness -This gives a unique value for each payment instruction.
+                Instant.now().toEpochMilli()  //179136...     // signedAt (current time) — for freshness check
         );
 
-        String ciphertext = crypto.encrypt(instruction, serverKey.getPublicKey());
+        //PaymentInstruction → AES-256-GCM encryption → AES key protected with RSA-OAEP → Encrypted payload → sent through the mesh instead of exposing Alice → Bob → ₹500 in plaintext.
+        String ciphertext = crypto.encrypt(instruction, serverKey.getPublicKey()); //The payment instruction is encrypted using your hybrid crypto system.
 
-        MeshPacket packet = new MeshPacket();
-        packet.setPacketId(UUID.randomUUID().toString());
-        packet.setTtl(ttl);
-        packet.setCreatedAt(Instant.now().toEpochMilli());
-        packet.setCiphertext(ciphertext);
+        MeshPacket packet = new MeshPacket();              //Now we create the MeshPacket
+        packet.setPacketId(UUID.randomUUID().toString());  //sets Unique identifier for the packet.(nonce)
+        packet.setTtl(ttl);                                //sets ttl for the packet
+        packet.setCreatedAt(Instant.now().toEpochMilli()); //This is the packet creation timestamp.
+        packet.setCiphertext(ciphertext);                  //The encrypted payment becomes the packet's payload.
         return packet;
     }
 
