@@ -30,13 +30,18 @@ import java.util.Base64;
  * (fast + authenticated), then encrypt JUST the AES key with RSA-OAEP.
  *
  * Wire format (after base64 encoding):
- *   [ 256 bytes RSA-encrypted AES key ][ 12 bytes GCM IV ][ ciphertext + 16-byte tag ]
+ *            1st 256 bytes             |   next 12 bytes  |      remaining bytes
+ *   [ 256 bytes RSA-encrypted AES key ][ 12 bytes GCM IV ][ ciphertext + 16-byte tag ] IV -> Initialization Vector.
  *
  * AES-GCM is authenticated encryption: any single-bit tampering with the ciphertext
  * causes decryption to fail with an exception. This is what makes it safe for
  * untrusted intermediates to hold.
  */
-//Crypto layer handles security - handles How do we protect the payment?
+//Why AES?-> Same secret key
+//Why RSA?-> There are two keys: Public key and Private key. Sender has the server's public key and only the server has Private key
+//Why AES-GCM-> it provides authenticated encryption, so it protects confidentiality and also detects ciphertext tampering. CBC by itself does not provide that authentication.
+//we use a Base64-encoded encrypted packet mainly to represent binary encrypted data as text, so it can be transmitted through JSON and REST APIs easily.
+//Crypto layer handles security - handles How do we protect the payment? Encrypts and decrypts payment instructions, and calculates ciphertext hashes.
 @Service
 public class HybridCryptoService {
 
@@ -57,6 +62,7 @@ public class HybridCryptoService {
      * Encrypt a payment instruction with the server's public key.
      * Called by the simulated sender device.
      */
+    //it receives 2 things- instruction: the payment details to protect , serverPublicKey: the server's public RSA key.
     public String encrypt(PaymentInstruction instruction, PublicKey serverPublicKey) throws Exception {
         byte[] plaintext = json.writeValueAsBytes(instruction); //converts PaymentInstruction to Bytes Because encryption works on bytes, not Java objects
 

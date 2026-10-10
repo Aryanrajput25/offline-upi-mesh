@@ -39,37 +39,42 @@ public class BridgeIngestionService { //in this we decrypt the message, Think of
 
     public IngestResult ingest(MeshPacket packet, String bridgeNodeId, int hopCount) {
         try {
-            String packetHash = crypto.hashCiphertext(packet.getCiphertext()); //Hash the ciphertext, produces SHA-256 Hash like A82JD82JSK...
+            String packetHash = crypto.hashCiphertext(packet.getCiphertext()); //Hash the ciphertext, produces SHA-256 Hash like A82JD82JSK... , This hash becomes the idempotency key.
+                                                                               //The same ciphertext produces the same hash. Then we can ask- "Have I seen this exact ciphertext before?"
 
             // ---- Idempotency gate ----
-            if (!idempotency.claim(packetHash)) {
+            //it deligates to IdempotencyService
+            if (!idempotency.claim(packetHash)) { //checks for duplicate packets, if it is duplicate then return it is duplicate packet
                 log.info("DUPLICATE packet {} from bridge {} — dropped",
                         packetHash.substring(0, 12) + "...", bridgeNodeId);
                 return IngestResult.duplicate(packetHash);
             }
 
             // ---- Decrypt ----
+            //Only the backend possesses the RSA private key needed to recover the AES key.
             PaymentInstruction instruction;
             try {
-                instruction = crypto.decrypt(packet.getCiphertext()); //Now we finally recover PaymentInstruction containing Sender, Receiver, Amount, Nonce ,PIN Hash
+                instruction = crypto.decrypt(packet.getCiphertext()); //Now ciphertext becomes: PaymentInstruction, Now we finally recover PaymentInstruction containing Sender, Receiver, Amount, Nonce ,PIN Hash
             } catch (Exception e) {
                 log.warn("Decryption failed for packet {}: {}",
                         packetHash.substring(0, 12) + "...", e.getMessage());
                 return IngestResult.invalid(packetHash, "decryption_failed");
             }
+            //Suppose an attacker changes one character of ciphertext then this method throws an exception.
 
             // ---- Freshness check (replay protection) ----
             long ageSeconds = (Instant.now().toEpochMilli() - instruction.getSignedAt()) / 1000;
-            if (ageSeconds > maxAgeSeconds) {
+            if (ageSeconds > maxAgeSeconds) { //rejects an old packet
                 log.warn("Packet {} too old ({}s), rejected",
                         packetHash.substring(0, 12) + "...", ageSeconds);
                 return IngestResult.invalid(packetHash, "stale_packet");
             }
-            if (ageSeconds < -300) { // small clock-skew tolerance
+            if (ageSeconds < -300) { // small clock-skew tolerance, Reject packets that appear to be more than 5 minutes in the future.
                 return IngestResult.invalid(packetHash, "future_dated");
             }
 
             // ---- Settle ----
+            //this calls settlementservice
             Transaction tx = settlement.settle(instruction, packetHash, bridgeNodeId, hopCount); //This is where Money moves.
             return IngestResult.settled(packetHash, tx); //BridgeIngestionService itself never changes account balances. It simply passes the payment to the correct service.
 

@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 //Idempotency means that the same request is processed only once, even if it is received multiple times.
 //Before settlement, the server asks: "Have I already processed this payment?"
+//after hashing the cyphertext on BridgeIngestionService, we check for idempotency is the same hashed packet arrived eralier or not.
 @Service
 public class IdempotencyService {
 
@@ -36,11 +37,15 @@ public class IdempotencyService {
      * Try to claim a hash. Returns true if this caller is the first; false if
      * someone else already claimed it (i.e. the packet is a duplicate).
      */
+    //claim() basically means “try to reserve/mark this packet hash as already processed.”
     public boolean claim(String packetHash) {
         Instant now = Instant.now(); //Gets the current time. eg-10:30 AM
-        Instant prev = seen.putIfAbsent(packetHash, now); //agr map me vo packet phle se ni hai to add krdo wrna agr phle se hai to mt kro
+        Instant prev = seen.putIfAbsent(packetHash, now); //"Insert this hash only if it does not already exist."
         return prev == null;
     }
+    //"putIfAbsent makes the claim operation atomic within the JVM, so concurrent requests for the same hash cannot both successfully claim it."
+    //putIfAbsent() is atomic, so if 100 threads receive the same packet simultaneously, only one can successfully claim it.
+    //That is the reason the concurrency test can prove: 1 SETTLED, 99 DUPLICATE_DROPPED
 
     public int size() {
         return seen.size();

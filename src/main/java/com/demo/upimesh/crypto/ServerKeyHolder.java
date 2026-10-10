@@ -22,7 +22,7 @@ import java.util.Base64;
  * encrypt payloads.
  */
 @Component //Spring, please create exactly one object of this class and manage its lifecycle.
-public class ServerKeyHolder {
+public class ServerKeyHolder { //Generates and stores the server's RSA public and private keys.
 
     private static final Logger log = LoggerFactory.getLogger(ServerKeyHolder.class);
 
