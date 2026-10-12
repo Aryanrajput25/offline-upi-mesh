@@ -21,6 +21,8 @@ import java.util.Base64;
  * exposed via /api/server-key so the (simulated) sender devices can use it to
  * encrypt payloads.
  */
+//Public key  → used by sender to protect the AES key
+//Private key → used by server to recover the AES key
 @Component //Spring, please create exactly one object of this class and manage its lifecycle.
 public class ServerKeyHolder { //Generates and stores the server's RSA public and private keys.
 

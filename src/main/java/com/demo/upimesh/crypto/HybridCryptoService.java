@@ -63,20 +63,21 @@ public class HybridCryptoService {
      * Called by the simulated sender device.
      */
     //it receives 2 things- instruction: the payment details to protect , serverPublicKey: the server's public RSA key.
-    public String encrypt(PaymentInstruction instruction, PublicKey serverPublicKey) throws Exception {
+    public String encrypt(PaymentInstruction instruction, PublicKey serverPublicKey) throws Exception { //It returns a String containing the encrypted packet representation.
         byte[] plaintext = json.writeValueAsBytes(instruction); //converts PaymentInstruction to Bytes Because encryption works on bytes, not Java objects
 
-        // 1. Generate a one-time AES key for this packet.
+        // 1. Generate a fresh one-time AES key for this packet.
         KeyGenerator kg = KeyGenerator.getInstance("AES"); //Generate AES Key, Produces something like F92A7D... ,Every payment gets a new key.
         kg.init(AES_KEY_BITS);
         SecretKey aesKey = kg.generateKey();
 
-        // 2. AES-GCM encrypt the payload.
+        // 2. AES-GCM encrypt the payload. AES-GCM encrypts the original payment data to produce ciphertext.
         byte[] iv = new byte[GCM_IV_BYTES]; //Generate IV
         rng.nextBytes(iv); //Creates 12 random bytes. Again, every payment gets a new IV.
         Cipher aes = Cipher.getInstance(AES_TRANSFORMATION);
-        aes.init(Cipher.ENCRYPT_MODE, aesKey, new GCMParameterSpec(GCM_TAG_BITS, iv));
+        aes.init(Cipher.ENCRYPT_MODE, aesKey, new GCMParameterSpec(GCM_TAG_BITS, iv));  //GCM_TAG_BITS = 128 configures a 128-bit authentication tag.
         byte[] aesCiphertext = aes.doFinal(plaintext); //AES Encryption which encryptes the payment details
+        //The result is encrypted payment data with an authentication tag appended.
 
         // 3. RSA-OAEP encrypt the AES key with the server's public key.
         Cipher rsa = Cipher.getInstance(RSA_TRANSFORMATION); //RSA Encryption, Instead of encrypting the entire payment, only AES Key is encrypted using Server Public Key
@@ -99,14 +100,15 @@ public class HybridCryptoService {
      * If anything has been tampered with — wrong key, modified ciphertext,
      * truncated input — this throws.
      */
+    //This method is called by the backend after a packet passes the idempotency claim.
     public PaymentInstruction decrypt(String base64Ciphertext) throws Exception { //The decrypt() method simply performs the reverse:
-        byte[] all = Base64.getDecoder().decode(base64Ciphertext);
+        byte[] all = Base64.getDecoder().decode(base64Ciphertext); //This recovers the original packed binary bytes. It does not decrypt the payment yet.
 
         if (all.length < RSA_ENCRYPTED_KEY_BYTES + GCM_IV_BYTES + GCM_TAG_BITS / 8) {
             throw new IllegalArgumentException("Ciphertext too short");
         }
 
-        // Unpack
+        // Unpack these 3 things
         byte[] encryptedAesKey = new byte[RSA_ENCRYPTED_KEY_BYTES];
         byte[] iv = new byte[GCM_IV_BYTES];
         byte[] aesCiphertext = new byte[all.length - RSA_ENCRYPTED_KEY_BYTES - GCM_IV_BYTES];
@@ -116,20 +118,20 @@ public class HybridCryptoService {
         buf.get(iv);
         buf.get(aesCiphertext);
 
-        // 1. RSA-decrypt the AES key.
+        // 1. RSA private key - decrypts the AES key.
         Cipher rsa = Cipher.getInstance(RSA_TRANSFORMATION);
         OAEPParameterSpec oaep = new OAEPParameterSpec(
-                "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
-        rsa.init(Cipher.DECRYPT_MODE, serverKey.getPrivateKey(), oaep);
+                "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT); //This is the reverse of RSA encryption.
+        rsa.init(Cipher.DECRYPT_MODE, serverKey.getPrivateKey(), oaep); //Only someone who has the correct private key can recover the AES key. and server has this private key
         byte[] aesKeyBytes = rsa.doFinal(encryptedAesKey);
         SecretKey aesKey = new SecretKeySpec(aesKeyBytes, "AES");
 
-        // 2. AES-GCM decrypt + verify the tag.
+        // 2. AES-GCM decrypt + verify the tag . Decrypt and authenticate the payment
         Cipher aes = Cipher.getInstance(AES_TRANSFORMATION);
-        aes.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(GCM_TAG_BITS, iv));
+        aes.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(GCM_TAG_BITS, iv)); //This is where AES-GCM decrypts the payload and verifies its authentication tag.
         byte[] plaintext = aes.doFinal(aesCiphertext); //If any part of the encrypted data is changed, aes.doFinal() will throw an exception because GCM verifies the authentication tag.
 
-        return json.readValue(plaintext, PaymentInstruction.class);
+        return json.readValue(plaintext, PaymentInstruction.class); //Jackson converts the decrypted JSON bytes back into a PaymentInstruction
     }
 
     /**
@@ -139,6 +141,8 @@ public class HybridCryptoService {
      * but cannot forge a valid ciphertext for a different payload. Two delivered
      * copies of the same packet have identical ciphertexts, hence identical hashes.
      */
+    //Same ciphertext → Same hash
+    //Different ciphertext → Different hash, with overwhelming probability
     public String hashCiphertext(String base64Ciphertext) throws Exception { //It computes a SHA-256 hash of the ciphertext.
         MessageDigest sha256 = MessageDigest.getInstance("SHA-256"); //The project uses this hash as an idempotency key.
         byte[] hash = sha256.digest(base64Ciphertext.getBytes());
